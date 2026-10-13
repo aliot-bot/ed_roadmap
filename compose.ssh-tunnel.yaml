@@ -1,0 +1,16 @@
+# Use together with compose.yaml for a private, SSH-tunnel-only deployment.
+# It exposes the application only on the VPS loopback interface.
+services:
+  backend:
+    build:
+      network: host
+
+  frontend:
+    build:
+      network: host
+
+  caddy:
+    ports: !override
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./Caddyfile.ssh-tunnel:/etc/caddy/Caddyfile:ro

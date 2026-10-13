@@ -1,0 +1,44 @@
+.env
+.env.*
+!.env.example
+.secrets/
+secrets/
+*.pem
+*.key
+backups/
+*.dump
+*.sql.gz
+coverage/
+test-results/
+playwright-report/
+node_modules/
+dist/
+bin/
+*.log
+*.tsbuildinfo
+/backend/server
+.DS_Store
+.idea/
+.vscode/
+
+# Frontend tooling caches and generated reports
+.vite/
+.cache/
+.eslintcache
+*.lcov
+*.pid
+*.pid.lock
+
+# Editor and operating-system temporary files
+*.swp
+*.swo
+*.tmp
+*.temp
+*~
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Disposable UI review captures
+ui-final-*.png

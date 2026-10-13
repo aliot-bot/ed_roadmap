@@ -1,0 +1,335 @@
+openapi: 3.1.0
+info:
+  title: Knowledge Map REST API
+  version: 0.2.0
+  description: Browser API. Mutating authenticated operations require the session cookie and X-CSRF-Token.
+servers:
+  - url: /api
+security:
+  - sessionCookie: []
+paths:
+  /auth/key-login:
+    post:
+      security: []
+      summary: Exchange an individual access key for a browser session
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [key], properties: {key: {type: string}}}}}}
+      responses:
+        '200': {$ref: '#/components/responses/Login'}
+        '401': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /auth/bootstrap:
+    post:
+      security: []
+      summary: Create the first and only bootstrap owner
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Credentials'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/Login'}
+        '409': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /auth/login:
+    post:
+      security: []
+      summary: Start a browser session
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Credentials'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/Login'}
+        '401': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
+  /auth/me:
+    get:
+      summary: Read current owner and restore the session-bound CSRF header
+      responses:
+        '200':
+          description: Current user
+          headers: {X-CSRF-Token: {schema: {type: string}}}
+          content: {application/json: {schema: {type: object, required: [user], properties: {user: {$ref: '#/components/schemas/User'}}}}}
+        '401': {$ref: '#/components/responses/Error'}
+  /auth/logout:
+    post:
+      summary: Revoke current session
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      responses: {'204': {description: Logged out}, '403': {$ref: '#/components/responses/Error'}}
+  /roadmaps:
+    get:
+      summary: List owned roadmaps with leaf progress
+      responses:
+        '200': {description: Roadmaps, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Roadmap'}}}}}}}
+    post:
+      summary: Create roadmap
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RoadmapInput'}}}}
+      responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Roadmap'}}}}, '400': {$ref: '#/components/responses/Error'}}
+  /roadmaps/{id}:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: Get owned roadmap
+      responses: {'200': {description: Roadmap, content: {application/json: {schema: {type: object, required: [roadmap], properties: {roadmap: {$ref: '#/components/schemas/Roadmap'}}}}}}, '404': {$ref: '#/components/responses/Error'}}
+    patch:
+      summary: Update roadmap
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RoadmapPatch'}}}}
+      responses: {'200': {description: Updated, content: {application/json: {schema: {$ref: '#/components/schemas/Roadmap'}}}}, '404': {$ref: '#/components/responses/Error'}}
+    delete:
+      summary: Delete roadmap and owned children
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      responses: {'204': {description: Deleted}, '404': {$ref: '#/components/responses/Error'}}
+  /roadmaps/{id}/cover:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: Read the owner's roadmap cover image
+      responses:
+        '200': {description: JPEG, PNG, GIF or WebP image bytes, content: {image/*: {schema: {type: string, format: binary}}}}
+        '404': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Replace the roadmap cover image
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {multipart/form-data: {schema: {type: object, required: [file], properties: {file: {type: string, format: binary}}}}}}
+      responses: {'200': {description: Saved cover metadata, content: {application/json: {schema: {$ref: '#/components/schemas/RoadmapCover'}}}}, '400': {$ref: '#/components/responses/Error'}}
+    delete:
+      summary: Remove the roadmap cover image
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      responses: {'204': {description: Removed}, '404': {$ref: '#/components/responses/Error'}}
+  /roadmaps/{id}/topics:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: List roadmap topics
+      responses: {'200': {description: Topics, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Topic'}}}}}}}}
+    post:
+      summary: Create topic
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TopicInput'}}}}
+      responses: {'201': {description: Created, content: {application/json: {schema: {$ref: '#/components/schemas/Topic'}}}}, '400': {$ref: '#/components/responses/Error'}}
+  /topics/{id}:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    patch:
+      summary: Rename, describe, reorder, or reparent topic
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TopicPatch'}}}}
+      responses: {'200': {description: Updated, content: {application/json: {schema: {$ref: '#/components/schemas/Topic'}}}}, '409': {$ref: '#/components/responses/Error'}}
+    delete:
+      summary: Delete topic subtree and dependent records
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      responses: {'204': {description: Deleted}, '404': {$ref: '#/components/responses/Error'}}
+  /topics/{id}/completion:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    put:
+      summary: Set completion for a leaf topic
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [completed], properties: {completed: {type: boolean}}}}}}
+      responses: {'204': {description: Saved}, '409': {description: Topic is a group, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}}
+  /topics/{id}/status:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    put:
+      summary: Set the owner-controlled status of a leaf topic
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [status], properties: {status: {$ref: '#/components/schemas/TopicStatus'}}}}}}
+      responses: {'200': {description: Saved status}, '400': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
+  /topics/{id}/note:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: Read private topic note
+      responses: {'200': {description: Note, content: {application/json: {schema: {$ref: '#/components/schemas/Note'}}}}}
+    put:
+      summary: Save private topic note
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Note'}}}}
+      responses: {'204': {description: Saved}, '400': {$ref: '#/components/responses/Error'}}
+  /topics/{id}/document:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: Read the long-form Markdown document for a topic
+      responses: {'200': {description: Document, content: {application/json: {schema: {$ref: '#/components/schemas/TopicDocument'}}}}, '404': {$ref: '#/components/responses/Error'}}
+    put:
+      summary: Save the long-form Markdown document for a topic
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/TopicDocumentInput'}}}}
+      responses: {'200': {description: Saved document with timestamps, content: {application/json: {schema: {$ref: '#/components/schemas/TopicDocument'}}}}, '400': {$ref: '#/components/responses/Error'}}
+  /analytics:
+    get:
+      summary: Read owner-scoped leaf-topic analytics
+      responses: {'200': {description: Analytics, content: {application/json: {schema: {$ref: '#/components/schemas/Analytics'}}}}}
+  /learning/activity:
+    get:
+      summary: Read confirmed study minutes split by local calendar day
+      parameters:
+        - {name: from, in: query, schema: {type: string}, description: RFC3339 or YYYY-MM-DD inclusive lower bound}
+        - {name: to, in: query, schema: {type: string}, description: RFC3339 or YYYY-MM-DD exclusive upper bound}
+        - {name: timezone, in: query, schema: {type: string}, description: IANA timezone name}
+      responses: {'200': {description: Daily activity, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/LearningActivityDay'}}}}}}}}
+  /learning/activity/{date}:
+    parameters:
+      - {name: date, in: path, required: true, schema: {type: string, format: date}}
+      - {name: timezone, in: query, schema: {type: string}}
+    get:
+      summary: Read one local calendar day
+      responses: {'200': {description: Day aggregate or null}}
+  /learning/achievements:
+    get:
+      summary: Read cumulative 4h, 6h and 8h day counts
+      parameters:
+        - {name: from, in: query, schema: {type: string}}
+        - {name: to, in: query, schema: {type: string}}
+        - {name: timezone, in: query, schema: {type: string}}
+      responses: {'200': {description: Achievement counts, content: {application/json: {schema: {type: object, properties: {items: {type: array, items: {$ref: '#/components/schemas/LearningAchievement'}}}}}}}}
+  /roadmaps/{id}/dependencies:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: List prerequisite edges
+      responses: {'200': {description: Dependencies, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Dependency'}}}}}}}}
+    put:
+      summary: Atomically replace prerequisite DAG
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [dependencies], properties: {dependencies: {type: array, maxItems: 4000, items: {$ref: '#/components/schemas/Dependency'}}}}}}}
+      responses: {'204': {description: Saved}, '400': {$ref: '#/components/responses/Error'}}
+  /roadmaps/{id}/progress:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: Calculate leaf-only roadmap and group progress
+      responses: {'200': {description: Progress, content: {application/json: {schema: {$ref: '#/components/schemas/Progress'}}}}}
+  /roadmaps/{id}/layout:
+    parameters: [{$ref: '#/components/parameters/ID'}]
+    get:
+      summary: List topic coordinates and collapse state
+      responses: {'200': {description: Layout, content: {application/json: {schema: {type: object, required: [items], properties: {items: {type: array, items: {$ref: '#/components/schemas/Layout'}}}}}}}}
+    put:
+      summary: Upsert bounded layout items
+      parameters: [{$ref: '#/components/parameters/CSRF'}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, additionalProperties: false, required: [items], properties: {items: {type: array, maxItems: 2000, items: {$ref: '#/components/schemas/Layout'}}}}}}}
+      responses: {'204': {description: Saved}, '400': {$ref: '#/components/responses/Error'}}
+components:
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: roadmap_session}
+  parameters:
+    ID: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    CSRF: {name: X-CSRF-Token, in: header, required: true, schema: {type: string}}
+  responses:
+    Login:
+      description: Session created
+      headers: {X-CSRF-Token: {schema: {type: string}}}
+      content: {application/json: {schema: {type: object, required: [user], properties: {user: {$ref: '#/components/schemas/User'}}}}}
+    Error:
+      description: Safe API error
+      content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}
+  schemas:
+    UUID: {type: string, format: uuid}
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [login, password]
+      properties:
+        login: {type: string, minLength: 3, maxLength: 254}
+        password: {type: string, minLength: 12, maxLength: 1024}
+    User:
+      type: object
+      required: [id, login]
+      properties: {id: {$ref: '#/components/schemas/UUID'}, login: {type: string}, created_at: {type: string, format: date-time}}
+    RoadmapInput:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties: {title: {type: string, minLength: 1, maxLength: 200}, description: {type: string, maxLength: 5000}}
+    RoadmapPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties: {title: {type: string, minLength: 1, maxLength: 200}, description: {type: string, maxLength: 5000}}
+    Roadmap:
+      allOf:
+        - {$ref: '#/components/schemas/RoadmapInput'}
+        - {type: object, required: [id, created_at, updated_at], properties: {id: {$ref: '#/components/schemas/UUID'}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}, has_cover: {type: boolean}, progress: {$ref: '#/components/schemas/Progress'}}}
+    RoadmapCover:
+      type: object
+      required: [mime_type, updated_at]
+      properties: {mime_type: {type: string, enum: [image/jpeg, image/png, image/gif, image/webp]}, updated_at: {type: string, format: date-time}}
+    TopicInput:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 300}
+        description: {type: string, maxLength: 20000}
+        parent_id: {oneOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        sort_order: {type: integer}
+        kind: {type: string, enum: [topic, task], default: topic}
+        task_status: {type: string, enum: [not_started, in_progress, completed], default: not_started}
+        status: {$ref: '#/components/schemas/TopicStatus'}
+        priority: {$ref: '#/components/schemas/TopicPriority'}
+    TopicPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: {type: string, minLength: 1, maxLength: 300}
+        description: {type: string, maxLength: 20000}
+        parent_id: {oneOf: [{$ref: '#/components/schemas/UUID'}, {type: 'null'}]}
+        sort_order: {type: integer}
+        kind: {type: string, enum: [topic, task]}
+        task_status: {type: string, enum: [not_started, in_progress, completed]}
+        status: {$ref: '#/components/schemas/TopicStatus'}
+        priority: {$ref: '#/components/schemas/TopicPriority'}
+    Topic:
+      allOf:
+        - {$ref: '#/components/schemas/TopicInput'}
+        - {type: object, required: [id, roadmap_id, completed, status, priority], properties: {id: {$ref: '#/components/schemas/UUID'}, roadmap_id: {$ref: '#/components/schemas/UUID'}, completed: {type: boolean}, status: {$ref: '#/components/schemas/TopicStatus'}, priority: {$ref: '#/components/schemas/TopicPriority'}, created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    TopicStatus: {type: string, enum: [not_started, in_progress, needs_review, completed]}
+    TopicPriority: {type: string, enum: [critical, important, optional, skippable]}
+    LearningActivityDay:
+      type: object
+      required: [date, study_minutes, intensity]
+      properties:
+        date: {type: string, format: date}
+        study_minutes: {type: integer, minimum: 0}
+        intensity: {type: string, enum: [none, low, moderate, high, max]}
+        achievements: {type: array, items: {type: string, enum: [four_hours, six_hours, eight_hours]}}
+    LearningAchievement:
+      type: object
+      required: [kind, days]
+      properties: {kind: {type: string, enum: [4h, 6h, 8h]}, days: {type: integer, minimum: 0}}
+    Dependency:
+      type: object
+      additionalProperties: false
+      required: [predecessor_topic_id, successor_topic_id]
+      properties: {predecessor_topic_id: {$ref: '#/components/schemas/UUID'}, successor_topic_id: {$ref: '#/components/schemas/UUID'}}
+    Note: {type: object, additionalProperties: false, required: [content], properties: {content: {type: string, maxLength: 100000}}}
+    TopicDocumentInput: {type: object, additionalProperties: false, required: [content], properties: {content: {type: string, maxLength: 200000, description: Markdown document body}}}
+    TopicDocument:
+      allOf:
+        - {$ref: '#/components/schemas/TopicDocumentInput'}
+        - {type: object, properties: {created_at: {type: string, format: date-time}, updated_at: {type: string, format: date-time}}}
+    ProgressSummary:
+      type: object
+      required: [total, completed, remaining, percent]
+      properties:
+        total: {type: integer, minimum: 0}
+        completed: {type: integer, minimum: 0}
+        remaining: {type: integer, minimum: 0}
+        percent: {oneOf: [{type: number, minimum: 0, maximum: 100}, {type: 'null'}]}
+    RoadmapAnalytics:
+      type: object
+      required: [id, title, leaf_topics]
+      properties: {id: {$ref: '#/components/schemas/UUID'}, title: {type: string}, leaf_topics: {$ref: '#/components/schemas/ProgressSummary'}}
+    Analytics:
+      type: object
+      required: [roadmap_count, leaf_topics, roadmaps]
+      properties:
+        roadmap_count: {type: integer, minimum: 0}
+        leaf_topics: {$ref: '#/components/schemas/ProgressSummary'}
+        roadmaps: {type: array, items: {$ref: '#/components/schemas/RoadmapAnalytics'}}
+    Layout:
+      type: object
+      additionalProperties: false
+      required: [topic_id, x, y]
+      properties: {topic_id: {$ref: '#/components/schemas/UUID'}, x: {type: number}, y: {type: number}, collapsed: {type: boolean, default: false}}
+    Progress:
+      type: object
+      required: [total, completed, percent, groups]
+      properties:
+        total: {type: integer, minimum: 0}
+        completed: {type: integer, minimum: 0}
+        percent: {oneOf: [{type: number, minimum: 0, maximum: 100}, {type: 'null'}]}
+        status_counts: {type: object, required: [not_started, in_progress, needs_review, completed], properties: {not_started: {type: integer, minimum: 0}, in_progress: {type: integer, minimum: 0}, needs_review: {type: integer, minimum: 0}, completed: {type: integer, minimum: 0}}}
+        groups: {type: array, items: {type: object, required: [topic_id, total, completed, percent], properties: {topic_id: {$ref: '#/components/schemas/UUID'}, total: {type: integer}, completed: {type: integer}, percent: {oneOf: [{type: number}, {type: 'null'}]}}}}
+    Error:
+      type: object
+      required: [message]
+      properties: {message: {type: string}, details: {}}

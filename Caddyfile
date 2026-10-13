@@ -1,0 +1,39 @@
+{
+	admin off
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Content-Security-Policy "base-uri 'self'; default-src 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; style-src 'self' 'unsafe-inline'"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		X-Permitted-Cross-Domain-Policies "none"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy backend:8080
+	}
+
+	@mcp path /mcp /mcp/* /.well-known/oauth-protected-resource* /.well-known/oauth-authorization-server*
+	handle @mcp {
+		reverse_proxy backend:8080 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
