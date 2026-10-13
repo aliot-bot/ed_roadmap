@@ -1,13 +1,13 @@
 # API specification
 
-Все REST-маршруты, кроме health и bootstrap до создания владельца, требуют browser session. Изменяющие cookie-запросы требуют `X-CSRF-Token`. JSON limits применяются до декодирования.
+All REST routes, except health and bootstrap before an owner exists, require a browser session. Cookie-authenticated mutations require `X-CSRF-Token`. JSON limits apply before decoding.
 
 ## Auth
 
-- `POST /api/auth/bootstrap` `{login,password}` — создаёт единственного первого владельца; после этого `409`.
-- `POST /api/auth/login` `{login,password}` — выдаёт HttpOnly session cookie и CSRF response header.
-- `GET /api/auth/me` — `{id,login}` и актуальный CSRF header.
-- `POST /api/auth/logout` — отзывает текущую session.
+- `POST /api/auth/bootstrap` `{login,password}` — creates the only initial owner; subsequent calls return `409`.
+- `POST /api/auth/login` `{login,password}` — issues an HttpOnly session cookie and a CSRF response header.
+- `GET /api/auth/me` — returns `{id,login}` and the current CSRF header.
+- `POST /api/auth/logout` — revokes the current session.
 
 ## Roadmaps and topics
 
@@ -18,12 +18,12 @@
 - `PATCH|DELETE /api/topics/{id}`
 - `PUT /api/topics/{id}/completion` `{completed:boolean}`
 - `GET|PUT /api/topics/{id}/note` / `{content:string}`
-- `GET|PUT /api/topics/{id}/document` / `{content:string}` — отдельный Markdown-конспект, до 200000 Unicode-символов; ответ содержит `created_at` и `updated_at` после сохранения.
+- `GET|PUT /api/topics/{id}/document` / `{content:string}` — a separate Markdown document, up to 200,000 Unicode characters; the response includes `created_at` and `updated_at` after saving.
 - `GET|PUT /api/roadmaps/{id}/dependencies` / `{dependencies:[...]}`
 - `GET /api/roadmaps/{id}/progress`
-- `GET /api/analytics` — owner-scoped количество карт и leaf-only статистика по всем картам с разбивкой по roadmap; при отсутствии leaf topics `percent` равен `null`.
+- `GET /api/analytics` — owner-scoped roadmap count and leaf-only statistics across all roadmaps, broken down by roadmap; `percent` is `null` when there are no leaf topics.
 - `GET|PUT /api/roadmaps/{id}/layout` / `{items:[{topic_id,x,y,collapsed}]}`
-- `POST /api/auth/key-login` `{key:string}` — закрытый вход; ответ об ошибке не раскрывает пользователя. Публичный bootstrap выключен по умолчанию.
+- `POST /api/auth/key-login` `{key:string}` — restricted login; an error response does not reveal the user. Public bootstrap is disabled by default.
 - Topics accept `kind: topic|task`, `priority: critical|important|optional|skippable` and task-only `task_status: not_started|in_progress|completed`.
 - `PUT /api/topics/{id}/status` accepts topic-only `not_started|in_progress|needs_review|completed`. It is owner-scoped, rejects tasks and non-leaf aggregate sections, and keeps legacy `completed` compatibility in sync.
 - `PATCH /api/topics/{id}` can update `priority`; topic status may also be supplied but remains separate from task status.

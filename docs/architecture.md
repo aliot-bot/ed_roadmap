@@ -1,8 +1,8 @@
-# Архитектура
+# Architecture
 
-## Контекст
+## Context
 
-Система — модульный монолит: React SPA и один stateless Go-процесс, который предоставляет REST и MCP поверх общего application/service слоя. PostgreSQL — единственный источник истины. Caddy завершает TLS и маршрутизирует публичный трафик; PostgreSQL и backend не публикуют хостовые порты.
+The system is a modular monolith: a React SPA and one stateless Go process that exposes REST and MCP through a shared application/service layer. PostgreSQL is the single source of truth. Caddy terminates TLS and routes public traffic; PostgreSQL and the backend do not publish host ports.
 
 ```text
 Browser -> HTTPS/Caddy -> React UI
@@ -10,30 +10,30 @@ Browser -> HTTPS/Caddy -> React UI
 MCP client -> HTTPS/Caddy -> MCP adapter ---+-> application services -> repositories -> PostgreSQL
 ```
 
-## Границы
+## Boundaries
 
-- `domain`: сущности, типы ошибок и инварианты, не зависит от транспорта/БД.
-- `service`: use cases, ownership, транзакционные правила, DAG/иерархия, прогресс.
-- `repository`: параметризованный SQL через pgx, транзакции и persistent sessions/tokens.
-- `httpapi`: DTO, cookie/CSRF, авторизация, limits, безопасное отображение ошибок.
-- `mcp`: JSON-RPC Streamable HTTP и схемы tools; вызывает те же services, не SQL.
-- `frontend`: server-state через TanStack Query; graph/tree — два представления одних данных.
+- `domain`: entities, error types, and invariants; it does not depend on transport or the database.
+- `service`: use cases, ownership, transactional rules, DAG/hierarchy, and progress.
+- `repository`: parameterized SQL through pgx, transactions, and persistent sessions/tokens.
+- `httpapi`: DTOs, cookies/CSRF, authorization, limits, and safe error mapping.
+- `mcp`: JSON-RPC Streamable HTTP and tool schemas; it calls the same services, never SQL directly.
+- `frontend`: server state through TanStack Query; graph and tree are two views of the same data.
 
-## Ключевые решения
+## Key decisions
 
-- UUID являются устойчивыми внешними идентификаторами.
-- Иерархия (`parent_id`) и prerequisite DAG (`topic_dependencies`) хранятся отдельно.
-- Прогресс считается только по листьям. Группа не получает самостоятельную галочку.
-- Layout/collapse отделены от topic content и progress.
-- Обложка roadmap хранится отдельно от списка карт и загружается owner-scoped endpoint; Markdown-конспект открывается отдельным диалогом, не перегружая карточку темы.
-- Session cookie хранит случайный непрозрачный токен; в БД — только hash. Изменяющие cookie-запросы требуют CSRF token.
-- MCP bearer tokens имеют отдельные read/write scopes. Tools не предоставляют удаление, изменение заметок или progress.
-- Batch MCP операции ограничены, транзакционны и поддерживают operation/idempotency key.
+- UUIDs are stable external identifiers.
+- The hierarchy (`parent_id`) and prerequisite DAG (`topic_dependencies`) are stored separately.
+- Progress is calculated from leaves only. A group cannot be checked independently.
+- Layout and collapse state are separate from topic content and progress.
+- A roadmap cover is separate from roadmap lists and is loaded through an owner-scoped endpoint; a Markdown document opens in its own dialog, without overloading the topic card.
+- The session cookie stores a random opaque token; only its hash is stored in the database. Cookie mutations require a CSRF token.
+- MCP bearer tokens have separate read/write scopes. Tools cannot delete, edit notes, or mutate progress.
+- Batch MCP operations are bounded, transactional, and support an operation/idempotency key.
 
-## Потоки ошибок
+## Error flow
 
-Domain/service возвращают классифицированные validation/not-found/conflict/forbidden ошибки. Адаптеры переводят их в стабильные HTTP/JSON-RPC ответы без SQL, stack traces и секретов. Клиент сохраняет введённые значения при recoverable ошибке.
+Domain/service return classified validation, not-found, conflict, and forbidden errors. Adapters map them to stable HTTP/JSON-RPC responses without SQL, stack traces, or secrets. The client retains entered values after recoverable errors.
 
-## Производительность
+## Performance
 
-Индексы покрывают owner roadmaps, roadmap hierarchy, dependencies и session expiry. Получение карты агрегирует ограниченное число запросов, а UI скрывает свёрнутые поддеревья. Для MVP не добавляются Redis, queues или микросервисы.
+Indexes cover owner roadmaps, roadmap hierarchy, dependencies, and session expiry. Loading a roadmap aggregates a bounded number of queries, and the UI hides collapsed subtrees. Redis, queues, and microservices are not added for the MVP.

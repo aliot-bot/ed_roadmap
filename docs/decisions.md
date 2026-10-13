@@ -38,4 +38,4 @@ Learning activity is derived from closed active intervals, not page views or tim
 
 ## ADR-010 — Keep reordering, but move it out of the primary action row
 
-The former “Выше” and “Ниже” actions swap `sort_order` with the adjacent sibling. They persist in PostgreSQL, affect tree/default graph ordering, do not change hierarchy, prerequisite edges or priority, and are disabled at list boundaries. This is the only explicit keyboard/touch ordering path, so it is retained under “Порядок в структуре” and renamed “Переместить выше/ниже в списке” instead of being removed.
+The former “Move up” and “Move down” actions swap `sort_order` with the adjacent sibling. They persist in PostgreSQL, affect tree/default graph ordering, do not change hierarchy, prerequisite edges, or priority, and are disabled at list boundaries. This is the only explicit keyboard/touch ordering path, so it is retained under “Order in structure” and named “Move up/down in the list” instead of being removed.

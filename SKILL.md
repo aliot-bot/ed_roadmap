@@ -17,7 +17,7 @@ Use the `knowledge_map` MCP tools as the source of truth. Keep the user's learni
 
 - Create a roadmap only when the user explicitly asks for a new map. Use `create_roadmap` with an idempotency key.
 - Add topics with `create_topics_batch`. Preserve the requested hierarchy with `parent_id` or `parent_ref`, ordering with `sort_order`, and priority at creation time.
-- Translate priorities unless the user specifies another mapping: critical/«критично»/🔴 → `critical`; important/«важно»/🟠 → `important`; optional/«опционально» → `optional`; skippable/«пропустить» → `skippable`.
+- Translate priorities unless the user specifies another mapping: critical/high-priority/🔴 → `critical`; important/medium-priority/🟠 → `important`; optional → `optional`; skippable/skip → `skippable`.
 - For an existing topic use `update_topic`; to change only its priority, use `set_topic_priority`. Never overwrite unrelated title, parent, description, or ordering fields.
 - Put requested learning tasks into the topic's actual checklist using `add_checklist_items`. Do not substitute checklist items with a topic description. This API adds unchecked items, so do not use it to replace or remove existing checklist items.
 - Use a distinct, stable idempotency key for every write. After a batch write, verify the affected map with `get_roadmap` when the returned result does not already prove success.
@@ -26,7 +26,7 @@ Use the `knowledge_map` MCP tools as the source of truth. Keep the user's learni
 
 - For roadmap progress, use `get_roadmap`; report its supplied counts and percentages rather than estimating them.
 - For time and activity questions, use `get_learning_statistics` and/or `get_learning_activity`. Use the user's requested period and timezone; otherwise state the period/timezone used by the tool.
-- Clearly distinguish confirmed data from an inference. If the requested metric is unavailable or the map cannot be found, say «не нашёл» and name what is missing.
+- Clearly distinguish confirmed data from an inference. If the requested metric is unavailable or the map cannot be found, say that it was not found and name what is missing.
 - Keep reports compact: lead with progress, then the most useful blockers, priorities, or next topics. Do not mark work complete or modify learning data while only reporting analytics.
 
 ## Safety and communication

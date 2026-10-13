@@ -1,80 +1,80 @@
 # knowledge-map-manager
 
-Self-hosted приложение для личных карт знаний и MCP-навык для безопасного управления ими. Пользователь ведёт дорожные карты в браузере, а подключённый MCP-клиент может читать и менять их структуру в пределах выданных прав.
+Self-hosted application for personal knowledge maps, with an MCP skill for managing them safely. Users maintain roadmaps in the browser, while a connected MCP client can read and change their structure within its granted permissions.
 
-## Возможности
+## Features
 
-- Карты знаний с вложенными темами, зависимостями, приоритетами и листовым прогрессом.
-- Темы и задания, учебный таймер, история активности, заметки и Markdown-конспекты с изображениями.
-- Адаптивный React-интерфейс: граф на широком экране и дерево на мобильных устройствах.
-- Go API, PostgreSQL, закрытый вход по ключу, session cookie и CSRF-защита.
-- MCP endpoint с отдельными read/write scopes. MCP меняет только структуру: не отмечает прогресс и не редактирует заметки.
-- Caddy и Docker Compose для развёртывания на одном VPS, резервного копирования и изолированного восстановления.
+- Knowledge maps with nested topics, dependencies, priorities, and leaf-only progress.
+- Topics and tasks, a study timer, activity history, notes, and Markdown documents with images.
+- Responsive React UI: graph on wide screens and tree on mobile devices.
+- Go API, PostgreSQL, restricted key login, session cookies, and CSRF protection.
+- An MCP endpoint with separate read/write scopes. MCP changes structure only: it cannot mark progress or edit notes.
+- Caddy and Docker Compose for deployment on one VPS, backups, and isolated restoration.
 
-## MCP-навык
+## MCP skill
 
-[SKILL.md](SKILL.md) содержит переносимый навык `knowledge-map-manager`. Он использует MCP-инструменты как источник истины, запрашивает подтверждение неоднозначной цели и не выдумывает идентификаторы, прогресс или учебные данные.
+[SKILL.md](SKILL.md) contains the portable `knowledge-map-manager` skill. It treats MCP tools as the source of truth, asks for confirmation when a goal is ambiguous, and never invents identifiers, progress, or learning data.
 
-Поддерживаемые MCP-инструменты:
+Supported MCP tools:
 
-- чтение: `list_roadmaps`, `get_roadmap`, `get_learning_statistics`, `get_learning_activity`;
-- изменение структуры: `create_roadmap`, `create_topics_batch`, `update_topic`, `set_topic_priority`, `set_dependencies_batch`, `add_checklist_items`.
+- read: `list_roadmaps`, `get_roadmap`, `get_learning_statistics`, `get_learning_activity`;
+- structure changes: `create_roadmap`, `create_topics_batch`, `update_topic`, `set_topic_priority`, `set_dependencies_batch`, `add_checklist_items`.
 
-## Быстрый запуск
+## Quick start
 
-Нужны Docker Engine и Docker Compose.
+Docker Engine and Docker Compose are required.
 
-1. Скопируйте `.env.example` в `.env`, замените все значения `replace-with-...` и задайте `DOMAIN`. Для production у `.env` должны быть права `0600`.
-2. Запустите сервисы:
+1. Copy `.env.example` to `.env`, replace every `replace-with-...` value, and set `DOMAIN`. In production, `.env` must have `0600` permissions.
+2. Start the services:
 
    ```sh
    docker compose up -d --build
    docker compose ps
    ```
 
-3. На новой установке создайте владельца и сохраните выданный ключ:
+3. On a new installation, create an owner and store the generated key:
 
    ```sh
    docker compose exec backend /roadmap-api users create owner "Owner"
    ```
 
-4. Откройте `https://<DOMAIN>` и войдите ключом. PostgreSQL и backend не публикуют порты на хост; наружу доступны только 80/443 через Caddy.
+4. Open `https://<DOMAIN>` and sign in with the key. PostgreSQL and the backend do not publish host ports; only 80/443 are publicly available through Caddy.
 
-## Разработка
+## Development
 
 ```sh
 cd backend && go test ./... && go vet ./...
 cd ../frontend && npm ci && npm run lint && npm test && npm run build
 ```
 
-Перед релизом также выполните:
+Before a release, also run:
 
 ```sh
 docker compose --env-file .env config --quiet
 sh -n scripts/backup-postgres.sh scripts/restore-postgres.sh
 ```
 
-## Документация
+## Documentation
 
-- [Архитектура](docs/architecture.md)
-- [API и MCP](docs/api-specification.md)
+- [Architecture](docs/architecture.md)
+- [API and MCP](docs/api-specification.md)
 - [OpenAPI](docs/openapi.yaml)
-- [Модель данных](docs/database-design.md)
-- [Решения](docs/decisions.md)
-- [Развёртывание и восстановление](docs/deployment.md)
-- [Аудит безопасности](docs/security-audit.md)
+- [Data model](docs/database-design.md)
+- [Decisions](docs/decisions.md)
+- [Deployment and recovery](docs/deployment.md)
+- [Security audit](docs/security-audit.md)
 
-## Структура
+## Layout
 
-- `SKILL.md` — MCP-навык `knowledge-map-manager`;
-- `AGENTS.md` — правила внесения изменений в приложение;
-- `backend/` — Go API, MCP-адаптер и миграции;
-- `frontend/` — React-клиент;
-- `docs/` — техническая и эксплуатационная документация;
-- `scripts/` — backup и изолированное restore.
+- `SKILL.md` — the `knowledge-map-manager` MCP skill;
+- `AGENTS.md` — rules for changing the application;
+- `backend/` — Go API, MCP adapter, and migrations;
+- `frontend/` — React client;
+- `docs/` — technical and operational documentation;
+- `scripts/` — backup and isolated restore scripts.
 
-## Важные ограничения
+## Important limitations
 
-- Статический bearer-токен предназначен для доверенного MCP-клиента и не является OAuth 2.1/PKCE-интеграцией.
-- Для публичного production-развёртывания нужны DNS, VPS, firewall и реальные проверки TLS.
-- Перед использованием в нескольких инстансах требуется усилить сериализацию конкурентных операций с иерархией и MCP idempotency.
+- The static bearer token is intended for a trusted MCP client and is not an OAuth 2.1/PKCE integration.
+- Public production deployment requires DNS, a VPS, a firewall, and real TLS checks.
+- Before running multiple instances, strengthen serialization of concurrent hierarchy operations and MCP idempotency.

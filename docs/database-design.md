@@ -1,28 +1,28 @@
-# Проектирование базы данных
+# Database design
 
-## Сущности
+## Entities
 
-- `users` владеют `roadmaps`; login уникален, хранится только Argon2id hash.
-- `roadmaps` каскадно владеют `topics`.
-- `topics.parent_id` задаёт дерево; application service запрещает cross-roadmap parent и циклы.
-- `topic_dependencies` — отдельный направленный граф внутри roadmap; service проверяет принадлежность, дубликаты, self-edge и DAG.
-- `topic_progress` и `topic_notes` принадлежат паре user/topic.
-- `topic_progress.status` хранит ручной статус темы (`not_started`, `in_progress`, `needs_review`, `completed`); совместимый `completed` синхронизирован с ним. Миграция переводит старые `completed=true` в `completed`, остальные записи — в `not_started`.
-- `topics.priority` хранит независимый приоритет темы или задания (`critical`, `important`, `optional`, `skippable`), по умолчанию `important`.
-- `topic_documents` (миграция `002_topic_documents.sql`) хранит отдельный Markdown-конспект темы с `created_at`/`updated_at`; доступ всегда проверяет владельца roadmap.
-- `roadmap_covers` (миграция `003_roadmap_covers.sql`) хранит одну owner-scoped обложку на roadmap; бинарные данные не попадают в списочные ответы, а выдаются отдельным защищённым endpoint. Допустимы JPEG, PNG, GIF и WebP до 5 МБ.
-- `topic_layouts` хранит координаты и collapsed отдельно от предметных данных.
-- `sessions` и `auth_tokens` хранят hashes и сроки/revocation metadata.
-- `idempotency_operations` хранит hash запроса и сериализованный ответ пакетной операции.
-- `audit_events` фиксирует существенные изменения без секретов и текста заметок.
-- `learning_segments` хранит фактические активные интервалы таймера. Открытый интервал уникален в пределах session; pause/finish закрывает его, resume открывает новый. Для старых завершённых sessions миграция создаёт консервативный сегмент ровно на ранее подтверждённую `duration_seconds`, не добавляя времени.
+- `users` own `roadmaps`; login is unique and only its Argon2id hash is stored.
+- `roadmaps` own `topics` through cascading deletes.
+- `topics.parent_id` defines the tree; the application service rejects cross-roadmap parents and cycles.
+- `topic_dependencies` is a separate directed graph within a roadmap; the service validates ownership, duplicates, self-edges, and DAG properties.
+- `topic_progress` and `topic_notes` belong to a user/topic pair.
+- `topic_progress.status` stores the user-controlled topic status (`not_started`, `in_progress`, `needs_review`, `completed`); the compatible `completed` field is synchronized with it. The migration converts legacy `completed=true` values to `completed`, and all other records to `not_started`.
+- `topics.priority` stores the independent priority of a topic or task (`critical`, `important`, `optional`, `skippable`), defaulting to `important`.
+- `topic_documents` (migration `002_topic_documents.sql`) stores a separate topic Markdown document with `created_at`/`updated_at`; access always verifies roadmap ownership.
+- `roadmap_covers` (migration `003_roadmap_covers.sql`) stores one owner-scoped cover per roadmap; binary data is excluded from list responses and served from a dedicated protected endpoint. JPEG, PNG, GIF, and WebP are accepted up to 5 MB.
+- `topic_layouts` stores coordinates and collapse state separately from domain data.
+- `sessions` and `auth_tokens` store hashes and expiry/revocation metadata.
+- `idempotency_operations` stores a request hash and serialized response for a batch operation.
+- `audit_events` records material changes without secrets or note content.
+- `learning_segments` stores actual active timer intervals. An open interval is unique within a session; pause/finish closes it and resume opens a new one. For completed legacy sessions, the migration creates a conservative segment exactly matching the previously confirmed `duration_seconds`, without adding time.
 
-## Целостность и удаление
+## Integrity and deletion
 
-Удаление roadmap каскадно удаляет его темы, обложку и зависимые записи. Удаление topic каскадно удаляет всё поддерево из-за self-reference и все notes/documents/progress/layout/edges. Это поведение намеренное и требует явного подтверждения UI. Проверки, которые нельзя выразить локальным SQL constraint (same-roadmap parent/edge и отсутствие циклов), выполняются внутри транзакции service.
+Deleting a roadmap cascades to its topics, cover, and dependent records. Deleting a topic cascades to its entire subtree because of the self-reference, and to all notes, documents, progress, layouts, and edges. This behavior is intentional and requires explicit UI confirmation. Checks that cannot be expressed as a local SQL constraint (same-roadmap parents/edges and cycle prevention) run inside a service transaction.
 
-## Миграции и резервное копирование
+## Migrations and backups
 
-Миграции встроены в backend и применяются по порядку в транзакциях при старте. Production rollback для data-destructive изменений должен выполняться восстановлением из проверенной резервной копии; down SQL не запускается автоматически.
+Migrations are embedded in the backend and applied in order, transactionally, at startup. Production rollback for data-destructive changes must restore a verified backup; down SQL is never run automatically.
 
-Дневная активность и достижения не хранятся как независимая истина: backend пересчитывает их из подтверждённых сегментов в выбранной IANA timezone. Это исключает повторную выдачу достижения после синхронизации и позволяет корректно пересчитать результат после будущего редактирования источника.
+Daily activity and achievements are not stored as an independent source of truth: the backend recalculates them from confirmed segments in the selected IANA time zone. This prevents achievements from being awarded again after synchronization and allows correct recalculation after future source edits.

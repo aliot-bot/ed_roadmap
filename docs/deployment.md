@@ -1,4 +1,4 @@
-# Развёртывание и эксплуатация
+# Deployment and operations
 
 ## VPS prerequisites
 
@@ -9,15 +9,15 @@
 
 ## First launch
 
-1. Copy repository to the VPS.
-2. Copy `.env.example` to `.env`, replace every placeholder with a unique secret and run `chmod 600 .env`.
-3. Validate: `docker compose config --quiet`.
-4. Start: `docker compose up -d --build`.
+1. Copy the repository to the VPS.
+2. Copy `.env.example` to `.env`, replace every placeholder with a unique secret, and run `chmod 600 .env`.
+3. Validate with `docker compose config --quiet`.
+4. Start with `docker compose up -d --build`.
 5. Wait for `docker compose ps` to show healthy services. Inspect `docker compose logs backend caddy` on failure.
-6. Open HTTPS and use the UI first-launch flow once. Store the owner password outside the repository.
-7. Test unauthorized `/api/auth/me` and `/mcp`, then authenticated UI and MCP with their separate credentials.
+6. Open HTTPS and complete the UI first-launch flow once. Store the owner password outside the repository.
+7. Test unauthenticated `/api/auth/me` and `/mcp`, then the authenticated UI and MCP with their separate credentials.
 
-Migrations are embedded in the backend, ordered and transactionally applied before the server listens.
+Migrations are embedded in the backend, ordered, and applied transactionally before the server starts listening.
 
 ## Update
 
@@ -61,4 +61,3 @@ Common failures:
 - Browser mutation `403`: refresh `/api/auth/me`; the client recovers its session-bound CSRF token.
 - MCP `401`: verify exact bearer value and that `MCP_ENABLED=true`.
 - MCP `403`: verify owner exists and `MCP_SCOPES` contains the requested read/write scope.
-
