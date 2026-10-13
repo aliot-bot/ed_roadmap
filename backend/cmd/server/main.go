@@ -8,11 +8,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"roadmap/backend/internal/apperrors"
+	"roadmap/backend/internal/clog"
+	"roadmap/backend/internal/config"
+	"roadmap/backend/internal/domain"
 	"roadmap/backend/internal/httpapi"
 	"roadmap/backend/internal/migrations"
 	"roadmap/backend/internal/repository"
@@ -25,66 +28,98 @@ func main() {
 		healthcheck()
 		return
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		logger.Error("DATABASE_URL is required")
-		os.Exit(1)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	poolConfig, err := pgxpool.ParseConfig(dsn)
+	logger := clog.NewJSON(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+
+	cfg, err := config.Load(os.Getenv)
 	if err != nil {
-		logger.Error("parse database config", "error", err)
+		logger.Error("configuration failed", "operation", "config_load", "error_class", apperrors.Class(err))
 		os.Exit(1)
 	}
-	poolConfig.MaxConns = int32(intEnv("DATABASE_MAX_CONNS", 10))
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Database.ConnectTimeout)
+	defer cancel()
+
+	poolConfig, err := pgxpool.ParseConfig(cfg.Database.URL)
+	if err != nil {
+		logger.Error("database configuration failed", "operation", "database_config", "error_class", "internal")
+		os.Exit(1)
+	}
+	poolConfig.MaxConns = int32(cfg.Database.MaxConns)
+
 	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		logger.Error("connect database", "error", err)
+		logger.Error("database connection failed", "operation", "database_connect", "error_class", "internal")
 		os.Exit(1)
 	}
 	defer db.Close()
+
 	if err := db.Ping(ctx); err != nil {
-		logger.Error("ping database", "error", err)
+		logger.Error("database ping failed", "operation", "database_ping", "error_class", "internal")
 		os.Exit(1)
 	}
+
 	if err := migrations.Apply(ctx, db); err != nil {
-		logger.Error("apply migrations", "error", err)
+		logger.Error("database migrations failed", "operation", "migrations", "error_class", "internal")
 		os.Exit(1)
 	}
-	scopes := split(os.Getenv("MCP_SCOPES"))
-	if len(scopes) == 0 {
-		scopes = []string{"roadmaps:read", "roadmaps:write"}
-	}
+
 	store := repository.NewPostgres(db)
 	if len(os.Args) > 1 && os.Args[1] == "users" {
-		if err := usersCommand(ctx, store, os.Args[2:], os.Getenv("ACCESS_KEY_PEPPER")); err != nil {
-			logger.Error("users command failed", "error", err)
+		if err := usersCommand(ctx, store, os.Args[2:], cfg.AccessKeyPepper); err != nil {
+			logger.Error("users command failed", "operation", "users_command", "error_class", apperrors.Class(err))
 			os.Exit(1)
 		}
 		return
 	}
-	app := service.NewWithLimits(store, durationEnv("SESSION_TTL", 14*24*time.Hour), intEnv("MCP_MAX_BATCH_TOPICS", 200))
-	api := httpapi.New(app, httpapi.Config{SecureCookies: envBool("COOKIE_SECURE", true), CookieSameSite: cookieSameSite(os.Getenv("COOKIE_SAME_SITE")), MCPEnabled: envBool("MCP_ENABLED", true), MCPToken: envFirst("MCP_STATIC_TOKEN", "MCP_BEARER_TOKEN"), MCPOwnerLogin: envFirst("OWNER_LOGIN", "MCP_OWNER_LOGIN"), MCPScopes: scopes, AccessKeyPepper: os.Getenv("ACCESS_KEY_PEPPER"), AllowBootstrap: envBool("ALLOW_BOOTSTRAP", false)}, logger)
-	server := &http.Server{Addr: env("HTTP_ADDR", ":8080"), Handler: api.Router(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+
+	app := service.NewWithLimits(store, cfg.Session.TTL, cfg.MCP.MaxBatchTopics)
+	api := httpapi.New(app, httpapi.Config{
+		SecureCookies:   cfg.Cookies.Secure,
+		CookieSameSite:  cfg.Cookies.SameSite,
+		MCPEnabled:      cfg.MCP.Enabled,
+		MCPToken:        cfg.MCP.Token,
+		MCPOwnerLogin:   cfg.MCP.OwnerLogin,
+		MCPScopes:       cfg.MCP.Scopes,
+		AccessKeyPepper: cfg.AccessKeyPepper,
+		AllowBootstrap:  cfg.AllowBootstrap,
+	}, logger)
+
+	server := &http.Server{
+		Addr:              cfg.HTTP.Addr,
+		Handler:           api.Router(),
+		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
+		ReadTimeout:       cfg.HTTP.ReadTimeout,
+		WriteTimeout:      cfg.HTTP.WriteTimeout,
+		IdleTimeout:       cfg.HTTP.IdleTimeout,
+	}
+
 	go func() {
 		logger.Info("server started", "address", server.Addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("server failed", "error", err)
+			logger.Error("server failed", "operation", "http_server", "error_class", "internal")
 			os.Exit(1)
 		}
 	}()
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
-	shutdown, cancelShutdown := context.WithTimeout(context.Background(), 15*time.Second)
+
+	shutdown, cancelShutdown := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 	defer cancelShutdown()
 	if err := server.Shutdown(shutdown); err != nil {
-		logger.Error("graceful shutdown", "error", err)
+		logger.Error("graceful shutdown failed", "operation", "shutdown", "error_class", "internal")
 	}
 }
-func usersCommand(ctx context.Context, store *repository.Postgres, args []string, pepper string) error {
+
+type usersStore interface {
+	CreateUserWithAccessKey(context.Context, string, string, string, []byte) (domain.User, error)
+	FindUserByLogin(context.Context, string) (domain.User, string, error)
+	RotateAccessKey(context.Context, uuid.UUID, []byte) error
+	RevokeAccessKey(context.Context, uuid.UUID) error
+}
+
+func usersCommand(ctx context.Context, store usersStore, args []string, pepper string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: users create|rotate-key|revoke-key ...")
 	}
@@ -126,8 +161,9 @@ func usersCommand(ctx context.Context, store *repository.Postgres, args []string
 		return fmt.Errorf("unknown users command")
 	}
 }
+
 func healthcheck() {
-	c := http.Client{Timeout: 2 * time.Second}
+	c := http.Client{Timeout: config.DefaultHealthcheckTimeout}
 	r, err := c.Get("http://127.0.0.1:8080/healthz")
 	if err != nil || r.StatusCode != http.StatusOK {
 		if r != nil {
@@ -136,57 +172,4 @@ func healthcheck() {
 		os.Exit(1)
 	}
 	r.Body.Close()
-}
-func env(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-func envBool(key string, fallback bool) bool {
-	v := strings.ToLower(os.Getenv(key))
-	if v == "" {
-		return fallback
-	}
-	return v == "1" || v == "true" || v == "yes"
-}
-func split(v string) []string {
-	var out []string
-	for _, x := range strings.Split(v, ",") {
-		if x = strings.TrimSpace(x); x != "" {
-			out = append(out, x)
-		}
-	}
-	return out
-}
-func envFirst(keys ...string) string {
-	for _, key := range keys {
-		if v := os.Getenv(key); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-func durationEnv(key string, fallback time.Duration) time.Duration {
-	if v, err := time.ParseDuration(os.Getenv(key)); err == nil && v > 0 {
-		return v
-	}
-	return fallback
-}
-func intEnv(key string, fallback int) int {
-	var n int
-	if _, err := fmt.Sscanf(os.Getenv(key), "%d", &n); err == nil && n > 0 {
-		return n
-	}
-	return fallback
-}
-func cookieSameSite(value string) http.SameSite {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "strict":
-		return http.SameSiteStrictMode
-	case "none":
-		return http.SameSiteNoneMode
-	default:
-		return http.SameSiteLaxMode
-	}
 }

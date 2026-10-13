@@ -122,7 +122,16 @@ func CalculateProgress(topics []domain.Topic) domain.Progress {
 		return total, done
 	}
 	total, done := leafStats(nil)
-	out := domain.Progress{Total: total, Completed: done, StatusCounts: map[string]int{domain.TopicNotStarted: 0, domain.TopicInProgress: 0, domain.TopicNeedsReview: 0, domain.TopicCompleted: 0}}
+	out := domain.Progress{
+		Total:     total,
+		Completed: done,
+		StatusCounts: map[string]int{
+			domain.TopicNotStarted:  0,
+			domain.TopicInProgress:  0,
+			domain.TopicNeedsReview: 0,
+			domain.TopicCompleted:   0,
+		},
+	}
 	for _, t := range topics {
 		if len(children[t.ID]) == 0 && t.Kind != domain.ElementTask {
 			status := t.Status
